@@ -1,0 +1,272 @@
+#!/usr/bin/env ruby
+require 'json'
+require 'openssl'
+require 'pp'
+require 'socket'
+require 'time'
+
+module XDG
+    def self.home
+        ENV["HOME"]
+    end
+
+    def self.cache_home
+        ENV["XDG_CACHE_HOME"] || "#{home}/.cache"
+    end
+
+    def self.config_home
+        ENV["XDG_CONFIG_HOME"] || "#{home}/.config"
+    end
+
+    def self.data_home
+        ENV["XDG_DATA_HOME"] || "#{home}/.local/share"
+    end
+
+    def self.vendor
+        "nullroute.eu.org"
+    end
+
+    def self.cache_dir
+        "#{cache_home}/#{vendor}"
+    end
+
+    def self.config_dir
+        "#{config_home}/#{vendor}"
+    end
+
+    def self.data_dir
+        "#{data_home}/#{vendor}"
+    end
+end
+
+def load_config
+    path = "#{XDG.config_dir}/cert-check.conf"
+    config = {
+        :grace => 30,
+        :hosts => [],
+        :ports => {},
+        :cache => 3600,
+    }
+
+    File.open(path, "r") do |f|
+        f.each do |line|
+            cmd, *rest = line.strip.split
+            case cmd
+                when "check"
+                    host, *ports = *rest
+                    config[:hosts] << host
+                    config[:ports][host] = ports.map(&:to_i)
+                when "grace"
+                    config[:grace] = rest[0].to_i
+                when "every"
+                    config[:cache] = rest[0].to_i
+            end
+        end
+    end
+
+    return config
+end
+
+def load_state
+    path = "#{XDG.cache_dir}/cert-check.state"
+
+    begin
+        data = nil
+        File.open(path, "r") do |f|
+            data = JSON.load(f)
+        end
+        return data
+    rescue Errno::ENOENT
+        return nil
+    end
+end
+
+def store_state(data)
+    path = "#{XDG.cache_dir}/cert-check.state"
+
+    File.open(path, "w") do |f|
+        JSON.dump(data, f)
+    end
+end
+
+def ftp_transact(sock, command)
+    if command
+        sock.puts "#{command}\r"
+    end
+    responses = []
+    while true
+        line = sock.gets
+        responses << line
+        if line[0] != " "
+            if line[3] == " "
+                break
+            elsif line[3] != "-"
+                raise "invalid FTP data: #{line.inspect}"
+            end
+        end
+    end
+    return responses
+end
+
+def ftp_transact!(sock, command)
+    responses = ftp_transact(sock, command)
+    if responses[0][0] != "2"
+        raise "FTP failure: #{command.inspect} -> #{responses.inspect}"
+    end
+    return responses
+end
+
+def imap_transact!(sock, command)
+    if command
+        id = (Time.now.to_f*10000000).to_i.to_s(36)
+        sock.puts "#{id} #{command}\r"
+    else
+        id = "*"
+    end
+    line = sock.gets.split(" ", 3)
+    if line[0] != id
+        raise "unexpected IMAP data: #{command.inspect} -> #{line.inspect}"
+    elsif line[1] != "OK"
+        raise "IMAP failure: #{command.inspect} -> #{line.inspect}"
+    end
+end
+
+def pop_transact!(sock, command, with_data)
+    if command
+        puts "writing #{command.inspect}"
+        sock.puts "#{command}\r"
+    end
+    line = sock.gets
+    puts "got header #{line.inspect}"
+    if line.start_with?("+OK ")
+        responses = [line]
+        while with_data
+            line = sock.gets
+            responses << line
+            if line.rstrip == "."
+                break
+            end
+        end
+        return responses
+    else
+        raise "POP failure: #{command.inspect} -> #{line.inspect}"
+    end
+end
+
+def smtp_transact(sock, command)
+    if command
+        sock.puts "#{command}\r"
+    end
+    responses = []
+    while true
+        line = sock.gets
+        responses << line
+        if line[3] == " "
+            break
+        elsif line[3] != "-"
+            raise "invalid SMTP data: #{line.inspect}"
+        end
+    end
+    return responses
+end
+
+def smtp_transact!(sock, command)
+    responses = smtp_transact(sock, command)
+    if responses[0][0] != "2"
+        raise "SMTP failure: #{command.inspect} -> #{responses.inspect}"
+    end
+    return responses
+end
+
+def check_service(host, port)
+    cert = nil
+    TCPSocket.open(host, port) do |raw_sock|
+        case port
+        when 21
+            ftp_transact!(raw_sock, nil)
+            ftp_transact!(raw_sock, "FEAT")
+            ftp_transact!(raw_sock, "AUTH TLS")
+        when 110
+            pop_transact!(raw_sock, nil, false)
+            pop_transact!(raw_sock, "CAPA", true)
+            pop_transact!(raw_sock, "STLS", false)
+        when 25, 587
+            smtp_transact!(raw_sock, nil)
+            smtp_transact!(raw_sock, "EHLO #{Socket.gethostname}")
+            smtp_transact!(raw_sock, "STARTTLS")
+        when 143
+            imap_transact!(raw_sock, nil)
+            imap_transact!(raw_sock, "STARTTLS")
+        end
+        ssl_sock = OpenSSL::SSL::SSLSocket.new(raw_sock)
+        ssl_sock.hostname = host
+        ssl_sock.connect
+        cert = ssl_sock.peer_cert
+        ssl_sock.close
+    end
+    return cert
+end
+
+$config = load_config()
+
+$data = load_state()
+$data ||= {}
+$data["last_check"] ||= {}
+
+errs = []
+exps = []
+
+begin
+    $config[:hosts].each do |host|
+        $config[:ports][host].each do |port|
+            hp = "#{host}:#{port}"
+
+            last_check = $data["last_check"][hp] || 0
+            if last_check > Time.now.to_i - $config[:cache]
+                puts "skipping #{hp} (cached)..."
+                next
+            end
+
+            begin
+                puts "checking #{hp}..."
+                cert = check_service(host, port)
+            rescue Interrupt
+                raise
+            rescue Exception => ex
+                puts " - error: #{ex.class} #{ex.message}"
+                errs << "#{hp} – #{ex.class} #{ex.message}"
+            else
+                days = ((cert.not_after - Time.now) / 86400).to_i
+                if days < $config[:grace]
+                    puts " - subject: #{cert.subject}"
+                    puts " - issuer: #{cert.issuer}"
+                    puts " - validity: #{cert.not_before} – #{cert.not_after}"
+                    exps << "#{hp} – expires in #{days} days"
+                end
+                $data["last_check"][hp] = Time.now.to_i
+            end
+        end
+    end
+rescue Interrupt
+end
+
+store_state($data)
+
+if !errs.empty? || !exps.empty?
+    puts ""
+    if !exps.empty?
+        puts "The following certificates are about to expire:"
+        puts ""
+        exps.each{|s| puts " - #{s}"}
+        puts ""
+    end
+    if !errs.empty?
+        puts "The following hosts could not be checked:"
+        puts ""
+        errs.each{|s| puts " - #{s}"}
+        puts ""
+    end
+    exit 1
+end
+
+# vim: ts=4:sw=4:et
