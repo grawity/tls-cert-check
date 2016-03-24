@@ -136,7 +136,7 @@ def pop_transact!(sock, command, with_data)
         sock.puts "#{command}\r"
     end
     line = sock.gets
-    if line.start_with?("+OK ")
+    if line.start_with?("+OK")
         responses = [line]
         while with_data
             line = sock.gets
