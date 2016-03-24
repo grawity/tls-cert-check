@@ -139,26 +139,17 @@ def ldap_starttls!(sock)
             OpenSSL::ASN1::OctetString.new("1.3.6.1.4.1.1466.20037", 0, :IMPLICIT),
         ], 23, :IMPLICIT, :APPLICATION),
     ])
-    response = OpenSSL::ASN1::Sequence.new([
-        OpenSSL::ASN1::Integer.new(id),
-        OpenSSL::ASN1::Sequence.new([
-            OpenSSL::ASN1::Enumerated.new(0),
-            OpenSSL::ASN1::OctetString.new(""),
-            OpenSSL::ASN1::OctetString.new(""),
-        ], 24, :IMPLICIT, :APPLICATION),
-    ])
     sock.write(request.to_der)
     data = sock.recv(128)
-    if data != response.to_der
-        begin
-            response = OpenSSL::ASN1.decode(data)
-            error_code = r.value[1].value[0].value.to_i
-            error_oid = r.value[1].value[1].value
-            error_msg = r.value[1].value[2].value
-            raise "LDAP error: #{error_code}, #{error_oid.inspect}, #{error_msg.inspect}"
-        rescue OpenSSL::ASN1::ASN1Error, NoMethodError
-            raise "unexpected LDAP response: #{data.inspect}"
+    begin
+        response = OpenSSL::ASN1.decode(data)
+        result_code = response.value[1].value[0].value.to_i
+        if result_code != 0
+            error_msg = response.value[1].value[2].value
+            raise "LDAP error: #{error_msg.inspect} (#{result_code})"
         end
+    rescue OpenSSL::ASN1::ASN1Error, NoMethodError
+        raise "unexpected LDAP response: #{data.inspect}"
     end
 end
 
