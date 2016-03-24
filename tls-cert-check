@@ -205,8 +205,37 @@ def check_service(host, port)
     return cert
 end
 
-$config = load_config()
+def check_one(host, port, errs, exps)
 
+    hp = "#{host}:#{port}"
+
+    last_check = $data["last_check"][hp] || 0
+    if last_check > Time.now.to_i - $config[:cache]
+        puts "skipping #{hp} (cached)..."
+        return
+    end
+
+    begin
+        puts "checking #{hp}..."
+        cert = check_service(host, port)
+    rescue Interrupt
+        raise
+    rescue Exception => ex
+        puts " - error: #{ex.class} #{ex.message}"
+        errs << "#{hp} – #{ex.class} #{ex.message}"
+    else
+        days = ((cert.not_after - Time.now) / 86400).to_i
+        if days < $config[:grace]
+            puts " - subject: #{cert.subject}"
+            puts " - issuer: #{cert.issuer}"
+            puts " - validity: #{cert.not_before} – #{cert.not_after}"
+            exps << "#{hp} – expires in #{days} days"
+        end
+        $data["last_check"][hp] = Time.now.to_i
+    end
+end
+
+$config = load_config()
 $data = load_state()
 $data ||= {}
 $data["last_check"] ||= {}
@@ -214,41 +243,23 @@ $data["last_check"] ||= {}
 errs = []
 exps = []
 
-begin
-    $config[:hosts].each do |host|
-        $config[:ports][host].each do |port|
-            hp = "#{host}:#{port}"
-
-            last_check = $data["last_check"][hp] || 0
-            if last_check > Time.now.to_i - $config[:cache]
-                puts "skipping #{hp} (cached)..."
-                next
-            end
-
-            begin
-                puts "checking #{hp}..."
-                cert = check_service(host, port)
-            rescue Interrupt
-                raise
-            rescue Exception => ex
-                puts " - error: #{ex.class} #{ex.message}"
-                errs << "#{hp} – #{ex.class} #{ex.message}"
-            else
-                days = ((cert.not_after - Time.now) / 86400).to_i
-                if days < $config[:grace]
-                    puts " - subject: #{cert.subject}"
-                    puts " - issuer: #{cert.issuer}"
-                    puts " - validity: #{cert.not_before} – #{cert.not_after}"
-                    exps << "#{hp} – expires in #{days} days"
-                end
-                $data["last_check"][hp] = Time.now.to_i
+if ARGV.empty?
+    begin
+        $config[:hosts].each do |host|
+            $config[:ports][host].each do |port|
+                check_one(host, port, errs, exps)
             end
         end
+    rescue Interrupt
     end
-rescue Interrupt
-end
 
-store_state($data)
+    store_state($data)
+else
+    ARGV.each do |arg|
+        host, port = arg.split(":")
+        check_one(host, port.to_i, errs, exps)
+    end
+end
 
 if !errs.empty? || !exps.empty?
     puts ""
