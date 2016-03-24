@@ -148,7 +148,7 @@ def ldap_starttls!(sock)
         ], 24, :IMPLICIT, :APPLICATION),
     ])
     sock.write(request.to_der)
-    data = sock.recv(16)
+    data = sock.recv(128)
     if data != response.to_der
         raise "unexpected LDAP response: #{data.inspect}"
     end
