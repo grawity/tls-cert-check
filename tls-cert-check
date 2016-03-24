@@ -140,7 +140,7 @@ def ldap_starttls!(sock)
         ], 23, :IMPLICIT, :APPLICATION),
     ])
     response = OpenSSL::ASN1::Sequence.new([
-        OpenSSL::ASN1::Integer.new(1),
+        OpenSSL::ASN1::Integer.new(id),
         OpenSSL::ASN1::Sequence.new([
             OpenSSL::ASN1::Enumerated.new(0),
             OpenSSL::ASN1::OctetString.new(""),
