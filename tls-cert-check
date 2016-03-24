@@ -150,7 +150,15 @@ def ldap_starttls!(sock)
     sock.write(request.to_der)
     data = sock.recv(128)
     if data != response.to_der
-        raise "unexpected LDAP response: #{data.inspect}"
+        begin
+            response = OpenSSL::ASN1.decode(data)
+            error_code = r.value[1].value[0].value.to_i
+            error_oid = r.value[1].value[1].value
+            error_msg = r.value[1].value[2].value
+            raise "LDAP error: #{error_code}, #{error_oid.inspect}, #{error_msg.inspect}"
+        rescue OpenSSL::ASN1::ASN1Error, NoMethodError
+            raise "unexpected LDAP response: #{data.inspect}"
+        end
     end
 end
 
