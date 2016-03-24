@@ -133,11 +133,9 @@ end
 
 def pop_transact!(sock, command, with_data)
     if command
-        puts "writing #{command.inspect}"
         sock.puts "#{command}\r"
     end
     line = sock.gets
-    puts "got header #{line.inspect}"
     if line.start_with?("+OK ")
         responses = [line]
         while with_data
