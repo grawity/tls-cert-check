@@ -259,7 +259,11 @@ def check_one(host, port, errs, exps)
             puts " - subject: #{cert.subject}"
             puts " - issuer: #{cert.issuer}"
             puts " - validity: #{cert.not_before} – #{cert.not_after}"
-            exps << "#{hp} – expires in #{days} days"
+            if days < 0
+                exps << "#{hp} – expired #{-days} days ago"
+            else
+                exps << "#{hp} – expires in #{days} days"
+            end
         end
         $data["last_check"][hp] = Time.now.to_i
     end
