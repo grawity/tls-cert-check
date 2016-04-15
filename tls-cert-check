@@ -39,6 +39,10 @@ module XDG
     end
 end
 
+def warn(s)
+    STDERR.puts("warning: #{s}")
+end
+
 def load_config
     path = "#{XDG.config_dir}/cert-check.conf"
     config = {
@@ -48,20 +52,24 @@ def load_config
         :cache => 3600,
     }
 
-    File.open(path, "r") do |f|
-        f.each do |line|
-            cmd, *rest = line.strip.split
-            case cmd
-                when "check"
-                    host, *ports = *rest
-                    config[:hosts] << host
-                    config[:ports][host] = ports.map(&:to_i)
-                when "grace"
-                    config[:grace] = rest[0].to_i
-                when "every"
-                    config[:cache] = rest[0].to_i
+    begin
+        File.open(path, "r") do |f|
+            f.each do |line|
+                cmd, *rest = line.strip.split
+                case cmd
+                    when "check"
+                        host, *ports = *rest
+                        config[:hosts] << host
+                        config[:ports][host] = ports.map(&:to_i)
+                    when "grace"
+                        config[:grace] = rest[0].to_i
+                    when "every"
+                        config[:cache] = rest[0].to_i
+                end
             end
         end
+    rescue Errno::ENOENT => e
+        warn("config file not found: #{e}")
     end
 
     return config
