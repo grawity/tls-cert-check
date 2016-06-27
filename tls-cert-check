@@ -1,4 +1,31 @@
 #!/usr/bin/env ruby
+# (c) 2016 Mantas Mikulėnas <grawity@gmail.com>
+# Released under the MIT Expat License (dist/LICENSE.expat)
+#
+# Usage: tls-cert-check [HOST:PORT...]
+#
+# Configuration (~/.config/nullroute.eu.org/cert-check.conf):
+#
+#   # cache success results for 3600 seconds
+#   # (only configured hosts are cached, not ones provided via CLI)
+#   every 3600
+#
+#   # warn if certificate expires in 28 days or less
+#   grace 28
+#
+#   # check these hosts on given ports (STARTTLS is used automatically)
+#   check example.com 389 443 636
+#   check mail.example.com 25 143 587
+#
+# Supported STARTTLS protocols:
+#
+#   - FTP (AUTH TLS) on port 21
+#   - IMAP on port 143
+#   - LDAP on port 389
+#   - POP3 on port 110
+#   - SMTP on ports 25, 587
+#   - regular implicit TLS on all other ports
+#
 require 'json'
 require 'openssl'
 require 'pp'
@@ -238,7 +265,6 @@ def check_service(host, port)
 end
 
 def check_one(host, port, errs, exps)
-
     hp = "#{host}:#{port}"
 
     last_check = $data["last_check"][hp] || 0
