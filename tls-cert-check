@@ -236,7 +236,7 @@ end
 
 def check_service(host, port)
     cert = nil
-    TCPSocket.open(host, port) do |raw_sock|
+    Socket.tcp(host, port, :connect_timeout => 3) do |raw_sock|
         case port
         when 21
             ftp_transact!(raw_sock, nil)
