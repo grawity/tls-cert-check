@@ -1,4 +1,5 @@
 #!/usr/bin/env ruby
+# tls-cert-check - report expired TLS certificates
 # (c) 2016 Mantas Mikulėnas <grawity@gmail.com>
 # Released under the MIT License (dist/LICENSE.mit)
 #
