@@ -78,60 +78,6 @@ def warn(s)
     STDERR.puts("warning: #{s}")
 end
 
-def load_config
-    path = "#{XDG.config_dir}/cert-check.conf"
-    config = {
-        :grace => 30,
-        :hosts => [],
-        :ports => {},
-        :cache => 3600,
-    }
-
-    begin
-        File.open(path, "r") do |f|
-            f.each do |line|
-                cmd, *rest = line.strip.split
-                case cmd
-                    when "check"
-                        host, *ports = *rest
-                        config[:hosts] << host
-                        config[:ports][host] = ports.map(&:to_i)
-                    when "grace"
-                        config[:grace] = rest[0].to_i
-                    when "every"
-                        config[:cache] = rest[0].to_i
-                end
-            end
-        end
-    rescue Errno::ENOENT => e
-        warn("config file not found: #{e}")
-    end
-
-    return config
-end
-
-def load_state
-    path = "#{XDG.cache_dir}/cert-check.state"
-
-    begin
-        data = nil
-        File.open(path, "r") do |f|
-            data = JSON.load(f)
-        end
-        return data
-    rescue Errno::ENOENT
-        return nil
-    end
-end
-
-def store_state(data)
-    path = "#{XDG.cache_dir}/cert-check.state"
-
-    File.open(path, "w") do |f|
-        JSON.dump(data, f)
-    end
-end
-
 def ftp_transact(sock, command)
     if command
         sock.puts "#{command}\r"
@@ -272,88 +218,168 @@ def check_service(host, port)
     return cert
 end
 
-def check_one(host, port, errs, exps)
-    hp = "#{host}:#{port}"
+class CertChecker
+    def initialize
+        @hosts = []
+        @ports = {}
+        @grace = 30
+        @cache = 3600
+        @verbose = false
 
-    last_check = $data["last_check"][hp] || 0
-    if last_check > Time.now.to_i - $config[:cache]
-        puts "skipping #{hp} (cached)..."
-        return
+        @state = {}
+        @failures = []
+        @expiries = []
     end
 
-    begin
-        puts "checking #{hp}..."
-        cert = check_service(host, port)
-    rescue Interrupt
-        raise
-    rescue Exception => ex
-        puts " - error: #{ex.class} #{ex.message}"
-        errs << "#{hp} – #{ex.class} #{ex.message}"
-    else
-        days = ((cert.not_after - Time.now) / 86400).to_i
-        if days < $config[:grace] || $config[:verbose]
-            puts " - subject: #{cert.subject.to_rfc2253}"
-            puts " - issuer: #{cert.issuer.to_rfc2253}"
-            puts " - validity: #{cert.not_before} – #{cert.not_after}"
-            if days < 0
-                puts " - expired: #{-days} days ago"        if $config[:verbose]
-                exps << "#{hp} – expired #{-days} days ago"
-            else
-                puts " - expires: in #{days} days"          if $config[:verbose]
-                exps << "#{hp} – expires in #{days} days"   if days < $config[:grace]
+    attr_accessor :grace
+    attr_accessor :verbose
+
+    attr_reader :failures
+    attr_reader :expiries
+
+    def load_config!
+        begin
+            File.open(_config_path, "r") do |f|
+                f.each do |line|
+                    cmd, *rest = line.strip.split
+                    case cmd
+                        when "check"
+                            host, *ports = *rest
+                            @hosts << host
+                            @ports[host] = ports.map(&:to_i)
+                        when "grace"
+                            @grace = rest[0].to_i
+                        when "every"
+                            @cache = rest[0].to_i
+                    end
+                end
+            end
+        rescue Errno::ENOENT => e
+            warn("config file not found: #{e}")
+        end
+    end
+
+    def load_state!
+        begin
+            @state = _load_json(_cache_path)
+        rescue Errno::ENOENT
+            @state = {}
+        end
+    end
+
+    def store_state!
+        _dump_json(@state, _cache_path)
+    end
+
+    def check_one!(host, port)
+        hp = "#{host}:#{port}"
+
+        last_check = @state.dig("last_check", hp) || 0
+        if last_check > Time.now.to_i - @cache
+            puts "skipping #{hp} (cached)..."
+            return
+        end
+
+        begin
+            puts "checking #{hp}..."
+            cert = check_service(host, port)
+        rescue Interrupt
+            raise
+        rescue Exception => ex
+            puts " - error: #{ex.class} #{ex.message}"
+            @failures << "#{hp} – #{ex.class} #{ex.message}"
+        else
+            days = ((cert.not_after - Time.now) / 86400).to_i
+            if days < @grace or @verbose
+                puts " - subject: #{cert.subject.to_rfc2253}"
+                puts " - issuer: #{cert.issuer.to_rfc2253}"
+                puts " - validity: #{cert.not_before} – #{cert.not_after}"
+                if days < 0
+                    puts " - expired: #{-days} days ago" if @verbose
+                    @expiries << "#{hp} – expired #{-days} days ago"
+                else
+                    puts " - expires: in #{days} days" if @verbose
+                    @expiries << "#{hp} – expires in #{days} days" if days < @grace
+                end
+            end
+            @state["last_check"] ||= {}
+            @state["last_check"][hp] = Time.now.to_i
+        end
+    end
+
+    def check_all!
+        @hosts.each do |host|
+            @ports[host].each do |port|
+                check_one!(host, port)
             end
         end
-        $data["last_check"][hp] = Time.now.to_i
+    end
+
+    private
+
+    def _config_path
+        "#{XDG.config_dir}/cert-check.conf"
+    end
+
+    def _cache_path
+        "#{XDG.cache_dir}/cert-check.state"
+    end
+
+    def _load_json(path)
+        File.open(path, "r") do |f|
+            return JSON.load(f)
+        end
+    end
+
+    def _dump_json(data, path)
+        File.open(path, "w") do |f|
+            JSON.dump(data, f)
+        end
     end
 end
 
-$config = load_config()
-$data = load_state()
-$data ||= {}
-$data["last_check"] ||= {}
-
-errs = []
-exps = []
+cc = CertChecker.new
 
 parser = OptionParser.new do |opts|
     opts.on("-v", "--verbose", "Show information for valid certificates") do
-        $config[:verbose] = true
+        cc.verbose = true
+    end
+    opts.on("-g", "--grace DAYS", Integer, "Change minimum time until expiry") do |i|
+        cc.grace = i
     end
 end
 parser.parse!
 
 if ARGV.empty?
+    cc.load_config!
+    cc.load_state!
     begin
-        $config[:hosts].each do |host|
-            $config[:ports][host].each do |port|
-                check_one(host, port, errs, exps)
-            end
-        end
+        cc.check_all!
     rescue Interrupt
     end
-    store_state($data)
+    cc.store_state!
 else
     ARGV.each do |arg|
         host, port = arg.split(":")
         if port.nil?
             port = 443
         end
-        check_one(host, port.to_i, errs, exps)
+        cc.check_one!(host, port.to_i)
     end
 end
 
-if !errs.empty? || !exps.empty?
+if !cc.failures.empty? || !cc.expiries.empty?
     puts ""
-    if !exps.empty?
+    if !cc.expiries.empty?
         puts "The following certificates are about to expire:"
         puts ""
-        exps.each{|s| puts " - #{s}"}
+        cc.expiries.each{|s| puts " - #{s}"}
         puts ""
     end
-    if !errs.empty?
+    if !cc.failures.empty?
         puts "The following hosts could not be checked:"
         puts ""
-        errs.each{|s| puts " - #{s}"}
+        cc.failures.each{|s| puts " - #{s}"}
         puts ""
     end
     exit 1
