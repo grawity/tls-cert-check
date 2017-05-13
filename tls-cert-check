@@ -242,6 +242,9 @@ end
 
 class CertChecker
     def initialize
+        @config_path = "#{XDG.config_dir}/cert-check.conf"
+        @cache_path = "#{XDG.cache_dir}/cert-check.state"
+
         @hosts = []
         @ports = {}
         @grace = 30
@@ -253,6 +256,8 @@ class CertChecker
         @expiries = []
     end
 
+    attr_accessor :config_path
+
     attr_accessor :grace
     attr_accessor :verbose
 
@@ -261,7 +266,7 @@ class CertChecker
 
     def load_config!
         begin
-            File.open(_config_path, "r") do |f|
+            File.open(@config_path, "r") do |f|
                 f.each do |line|
                     cmd, *rest = line.strip.split
                     case cmd
@@ -283,14 +288,14 @@ class CertChecker
 
     def load_state!
         begin
-            @state = _load_json(_cache_path)
+            @state = _load_json(@cache_path)
         rescue Errno::ENOENT
             @state = {}
         end
     end
 
     def store_state!
-        _dump_json(@state, _cache_path)
+        _dump_json(@state, @cache_path)
     end
 
     def add_host(host, port)
@@ -347,14 +352,6 @@ class CertChecker
 
     private
 
-    def _config_path
-        "#{XDG.config_dir}/cert-check.conf"
-    end
-
-    def _cache_path
-        "#{XDG.cache_dir}/cert-check.state"
-    end
-
     def _load_json(path)
         File.open(path, "r") do |f|
             return JSON.load(f)
@@ -371,6 +368,9 @@ end
 cc = CertChecker.new
 
 parser = OptionParser.new do |opts|
+    opts.on("-c", "--config PATH", String, "Set path to configuration file") do |s|
+        cc.config_path = s
+    end
     opts.on("-g", "--grace DAYS", Integer, "Change minimum time until expiry") do |i|
         cc.grace = i
     end
