@@ -320,6 +320,9 @@ if ARGV.empty?
 else
     ARGV.each do |arg|
         host, port = arg.split(":")
+        if port.nil?
+            port = 443
+        end
         check_one(host, port.to_i, errs, exps)
     end
 end
