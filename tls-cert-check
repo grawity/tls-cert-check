@@ -29,6 +29,7 @@
 #
 require 'json'
 require 'openssl'
+require 'optparse'
 require 'pp'
 require 'socket'
 require 'time'
@@ -174,11 +175,11 @@ def imap_transact!(sock, command)
 end
 
 def ldap_starttls!(sock)
-    id = 1
     request = OpenSSL::ASN1::Sequence.new([
-        OpenSSL::ASN1::Integer.new(id),
+        OpenSSL::ASN1::Integer.new(1),
         OpenSSL::ASN1::Sequence.new([
-            OpenSSL::ASN1::OctetString.new("1.3.6.1.4.1.1466.20037", 0, :IMPLICIT),
+            OpenSSL::ASN1::OctetString.new("1.3.6.1.4.1.1466.20037",
+                                           0, :IMPLICIT),
         ], 23, :IMPLICIT, :APPLICATION),
     ])
     sock.write(request.to_der)
@@ -290,13 +291,13 @@ def check_one(host, port, errs, exps)
         errs << "#{hp} – #{ex.class} #{ex.message}"
     else
         days = ((cert.not_after - Time.now) / 86400).to_i
-        if days < $config[:grace]
+        if days < $config[:grace] || $config[:verbose]
             puts " - subject: #{cert.subject.to_rfc2253}"
             puts " - issuer: #{cert.issuer.to_rfc2253}"
             puts " - validity: #{cert.not_before} – #{cert.not_after}"
             if days < 0
                 exps << "#{hp} – expired #{-days} days ago"
-            else
+            elsif days < $config[:grace]
                 exps << "#{hp} – expires in #{days} days"
             end
         end
@@ -311,6 +312,13 @@ $data["last_check"] ||= {}
 
 errs = []
 exps = []
+
+parser = OptionParser.new do |opts|
+    opts.on("-v", "--verbose", "Show information for valid certificates") do
+        $config[:verbose] = true
+    end
+end
+parser.parse!
 
 if ARGV.empty?
     begin
