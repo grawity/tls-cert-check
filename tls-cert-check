@@ -78,6 +78,26 @@ def warn(s)
     STDERR.puts("warning: #{s}")
 end
 
+def parse_host_port(addr, default_port)
+    if addr =~ /^\[(.+)\]:(\d+)$/
+        return [$1, $2.to_i]
+    elsif addr =~ /^\[(.+)\]$/
+        return [$1, default_port]
+    elsif addr =~ /^(.+):(\d+)$/
+        return [$1, $2.to_i]
+    else
+        return [addr, default_port]
+    end
+end
+
+def format_host_port(host, port)
+    if host =~ /:/
+        return "[#{host}]:#{port}"
+    else
+        return "#{host}:#{port}"
+    end
+end
+
 def ftp_transact(sock, command)
     if command
         sock.puts "#{command}\r"
@@ -280,7 +300,7 @@ class CertChecker
     end
 
     def check_one!(host, port)
-        hp = "#{host}:#{port}"
+        hp = format_host_port(host, port)
 
         last_check = @state.dig("last_check", hp) || 0
         if last_check > Time.now.to_i - @cache
@@ -368,11 +388,8 @@ if ARGV.empty?
     cc.store_state!
 else
     ARGV.each do |arg|
-        host, port = arg.split(":")
-        if port.nil?
-            port = 443
-        end
-        cc.add_host(host, port.to_i)
+        host, port = parse_host_port(arg, 443)
+        cc.add_host(host, port)
     end
     cc.check_all!
 end
