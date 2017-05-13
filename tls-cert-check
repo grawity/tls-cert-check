@@ -1,6 +1,6 @@
 #!/usr/bin/env ruby
 # tls-cert-check - report expired TLS certificates
-# (c) 2016 Mantas Mikulėnas <grawity@gmail.com>
+# (c) 2016-2017 Mantas Mikulėnas <grawity@gmail.com>
 # Released under the MIT License (dist/LICENSE.mit)
 #
 # Usage: tls-cert-check [HOST:PORT...]
@@ -26,6 +26,8 @@
 #   - POP3 on port 110
 #   - SMTP on ports 25, 587
 #   - regular implicit TLS on all other ports
+#
+# TLS SNI is supported.
 #
 require 'json'
 require 'openssl'
