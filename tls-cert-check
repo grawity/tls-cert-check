@@ -67,6 +67,12 @@ module XDG
     end
 end
 
+class OpenSSL::X509::Name
+    def to_rfc2253
+        to_s(OpenSSL::X509::Name::RFC2253)
+    end
+end
+
 def warn(s)
     STDERR.puts("warning: #{s}")
 end
@@ -285,8 +291,8 @@ def check_one(host, port, errs, exps)
     else
         days = ((cert.not_after - Time.now) / 86400).to_i
         if days < $config[:grace]
-            puts " - subject: #{cert.subject}"
-            puts " - issuer: #{cert.issuer}"
+            puts " - subject: #{cert.subject.to_rfc2253}"
+            puts " - issuer: #{cert.issuer.to_rfc2253}"
             puts " - validity: #{cert.not_before} – #{cert.not_after}"
             if days < 0
                 exps << "#{hp} – expired #{-days} days ago"
