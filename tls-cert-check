@@ -296,9 +296,11 @@ def check_one(host, port, errs, exps)
             puts " - issuer: #{cert.issuer.to_rfc2253}"
             puts " - validity: #{cert.not_before} – #{cert.not_after}"
             if days < 0
+                puts " - expired: #{-days} days ago"        if $config[:verbose]
                 exps << "#{hp} – expired #{-days} days ago"
-            elsif days < $config[:grace]
-                exps << "#{hp} – expires in #{days} days"
+            else
+                puts " - expires: in #{days} days"          if $config[:verbose]
+                exps << "#{hp} – expires in #{days} days"   if days < $config[:grace]
             end
         end
         $data["last_check"][hp] = Time.now.to_i
@@ -329,7 +331,6 @@ if ARGV.empty?
         end
     rescue Interrupt
     end
-
     store_state($data)
 else
     ARGV.each do |arg|
