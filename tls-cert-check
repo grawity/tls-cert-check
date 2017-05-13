@@ -271,6 +271,14 @@ class CertChecker
         _dump_json(@state, _cache_path)
     end
 
+    def add_host(host, port)
+        if @ports[host].nil?
+            @hosts << host
+            @ports[host] = []
+        end
+        @ports[host] << port
+    end
+
     def check_one!(host, port)
         hp = "#{host}:#{port}"
 
@@ -364,8 +372,9 @@ else
         if port.nil?
             port = 443
         end
-        cc.check_one!(host, port.to_i)
+        cc.add_host(host, port.to_i)
     end
+    cc.check_all!
 end
 
 if !cc.failures.empty? || !cc.expiries.empty?
