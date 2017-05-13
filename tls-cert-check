@@ -369,11 +369,11 @@ end
 cc = CertChecker.new
 
 parser = OptionParser.new do |opts|
-    opts.on("-v", "--verbose", "Show information for valid certificates") do
-        cc.verbose = true
-    end
     opts.on("-g", "--grace DAYS", Integer, "Change minimum time until expiry") do |i|
         cc.grace = i
+    end
+    opts.on("-v", "--verbose", "Show information for valid certificates") do
+        cc.verbose = true
     end
 end
 parser.parse!
