@@ -273,7 +273,9 @@ class CertChecker
                     case cmd
                         when "check"
                             host, *ports = *rest
-                            if ports.empty? { ports << 443 }
+                            if ports.empty?
+                                ports << 443
+                            end
                             @hosts << host
                             @ports[host] = ports.map(&:to_i)
                         when "grace"
