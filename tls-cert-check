@@ -248,6 +248,7 @@ class CertChecker
         @hosts = []
         @ports = {}
         @grace = 30
+        @grace_le = 14
         @cache = 3600
         @verbose = false
 
@@ -325,7 +326,11 @@ class CertChecker
             @failures << "#{hp} – #{ex.class} #{ex.message}"
         else
             days = ((cert.not_after - Time.now) / 86400).to_i
-            if days < @grace or @verbose
+            grace = @grace
+            if cert.issuer.to_rfc2253 =~ /,O=Let's Encrypt,C=US$/
+                grace = @grace_le
+            end
+            if days < grace or @verbose
                 puts " - subject: #{cert.subject.to_rfc2253}"
                 puts " - issuer: #{cert.issuer.to_rfc2253}"
                 puts " - validity: #{cert.not_before} – #{cert.not_after}"
@@ -334,7 +339,7 @@ class CertChecker
                     @expiries << "#{hp} – expired #{-days} days ago"
                 else
                     puts " - expires: in #{days} days" if @verbose
-                    @expiries << "#{hp} – expires in #{days} days" if days < @grace
+                    @expiries << "#{hp} – expires in #{days} days" if days < grace
                 end
             end
             @state["last_check"] ||= {}
