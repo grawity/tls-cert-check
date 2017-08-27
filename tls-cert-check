@@ -162,7 +162,7 @@ def irc_starttls!(sock)
         pos += 1 if parv[pos] =~ /^:/
         case parv[pos]
             when "CAP"
-                caps = parv[3..-1]
+                caps = parv[pos+3..-1]
                 if caps.grep(/^:?tls$/).empty?
                     raise "IRC server did not offer 'tls' capability"
                 end
