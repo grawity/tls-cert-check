@@ -18,6 +18,11 @@
 #   check example.com 389 443 636
 #   check mail.example.com 25 143 587
 #
+#   # check individual HA instances using Server Name Indication
+#   check host1.example.com/www.example.com 443
+#   check host2.example.com/www.example.com 443
+#   check host3.example.com/www.example.com 443
+#
 # Supported STARTTLS protocols:
 #
 #   - FTP (AUTH TLS) on port 21
@@ -27,7 +32,7 @@
 #   - SMTP on ports 25, 587
 #   - regular implicit TLS on all other ports
 #
-# TLS SNI is supported.
+# TLS SNI is always used (even if not specified explicitly).
 #
 require 'json'
 require 'openssl'
@@ -92,11 +97,28 @@ def parse_host_port(addr, default_port)
     end
 end
 
+def parse_host_port_sni(addr, default_port)
+    if addr =~ /^(.+)\/(.+?)$/
+        _, addr, sni = $~.to_a
+    end
+    host, port = parse_host_port(addr, default_port)
+    return [host, port, sni]
+end
+
 def format_host_port(host, port)
     if host =~ /:/
         return "[#{host}]:#{port}"
     else
         return "#{host}:#{port}"
+    end
+end
+
+def format_host_port_sni(host, port, sni)
+    hp = format_host_port(host, port)
+    if sni.nil? || sni == host
+        return hp
+    else
+        return "#{hp}/#{sni}"
     end
 end
 
@@ -209,7 +231,7 @@ def smtp_transact!(sock, command)
     return responses
 end
 
-def check_service(host, port)
+def check_service(host, port, sni = nil)
     cert = nil
     Socket.tcp(host, port, :connect_timeout => 3) do |raw_sock|
         case port
@@ -232,7 +254,7 @@ def check_service(host, port)
             ldap_starttls!(raw_sock)
         end
         ssl_sock = OpenSSL::SSL::SSLSocket.new(raw_sock)
-        ssl_sock.hostname = host
+        ssl_sock.hostname = sni || host
         ssl_sock.connect
         cert = ssl_sock.peer_cert
         ssl_sock.close
@@ -246,7 +268,7 @@ class CertChecker
         @cache_path = "#{XDG.cache_dir}/tls-cert-check.state"
 
         @hosts = []
-        @ports = {}
+        @services = {}
         @grace = 30
         @grace_le = 14
         @cache = 3600
@@ -273,11 +295,16 @@ class CertChecker
                     case cmd
                         when "check"
                             host, *ports = *rest
+                            if host =~ /^(.+)\/(.+?)$/
+                                _, host, sni = $~.to_a
+                            else
+                                sni = nil
+                            end
                             if ports.empty?
-                                ports << 443
+                                ports << "443"
                             end
                             @hosts << host
-                            @ports[host] = ports.map(&:to_i)
+                            @services[host] = ports.map{|p| {port: p.to_i, sni: sni}}
                         when "grace"
                             @grace = rest[0].to_i
                         when "every"
@@ -302,16 +329,17 @@ class CertChecker
         _dump_json(@state, @cache_path)
     end
 
-    def add_host(host, port)
-        if @ports[host].nil?
+    def add_host(host, port, sni)
+        if @services[host].nil?
             @hosts << host
-            @ports[host] = []
+            @services[host] = []
         end
-        @ports[host] << port
+        @services[host] << {port: port, sni: sni}
     end
 
-    def check_one!(host, port)
-        hp = format_host_port(host, port)
+    def check_one!(host, port, sni = nil)
+        sni = sni || host
+        hp = format_host_port_sni(host, port, sni)
 
         last_check = @state.dig("last_check", hp) || 0
         if last_check > Time.now.to_i - @cache
@@ -321,7 +349,7 @@ class CertChecker
 
         begin
             puts "checking #{hp}..."
-            cert = check_service(host, port)
+            cert = check_service(host, port, sni)
         rescue Interrupt
             raise
         rescue Exception => ex
@@ -352,8 +380,8 @@ class CertChecker
 
     def check_all!
         @hosts.each do |host|
-            @ports[host].each do |port|
-                check_one!(host, port)
+            @services[host].each do |i|
+                check_one!(host, i[:port], i[:sni])
             end
         end
     end
@@ -398,8 +426,8 @@ if ARGV.empty?
     cc.store_state!
 else
     ARGV.each do |arg|
-        host, port = parse_host_port(arg, 443)
-        cc.add_host(host, port)
+        host, port, sni = parse_host_port_sni(arg, 443)
+        cc.add_host(host, port, sni)
     end
     cc.check_all!
 end
