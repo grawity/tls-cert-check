@@ -149,6 +149,25 @@ def ftp_transact!(sock, command)
     return responses
 end
 
+def irc_starttls!(sock)
+    sock.puts "STARTTLS\r\n"
+    sock.puts "MODE FOO\r\n"
+    while line = sock.gets
+        parv = line.split(" ")
+        pos = 0
+        pos += 1 if parv[pos] =~ /^@/
+        pos += 1 if parv[pos] =~ /^:/
+        case parv[pos]
+            when "NOTICE"
+                nil
+            when "670"
+                return
+            else
+                raise "unexpected IRC data: #{line.inspect}"
+        end
+    end
+end
+
 def imap_transact!(sock, command)
     if command
         id = (Time.now.to_f*10000000).to_i.to_s(36)
@@ -250,6 +269,8 @@ def check_service(host, port, sni = nil)
         when 143
             imap_transact!(raw_sock, nil)
             imap_transact!(raw_sock, "STARTTLS")
+        when 194, 6667
+            irc_starttls!(raw_sock)
         when 389
             ldap_starttls!(raw_sock)
         end
