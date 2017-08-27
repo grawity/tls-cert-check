@@ -169,7 +169,9 @@ def irc_starttls!(sock)
             when "NOTICE"
                 nil
             when "451"
-                raise "unexpected IRC data: #{line.inspect}" unless caps
+                if !caps
+                    raise "IRC server did not respond to capability query"
+                end
             when "670"
                 return
             else
