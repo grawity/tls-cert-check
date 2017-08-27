@@ -157,7 +157,6 @@ def irc_starttls!(sock)
     sock.puts "STARTTLS\r\n"
     while line = sock.gets
         parv = line.split(" ")
-        puts parv.inspect
         pos = 0
         pos += 1 if parv[pos] =~ /^@/
         pos += 1 if parv[pos] =~ /^:/
