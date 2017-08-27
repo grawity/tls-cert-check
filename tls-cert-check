@@ -336,7 +336,8 @@ class CertChecker
                                 ports << "443"
                             end
                             @hosts << host
-                            @services[host] = ports.map{|p| {port: p.to_i, sni: sni}}
+                            @services[host] ||= []
+                            @services[host] += ports.map{|p| {port: p.to_i, sni: sni}}
                         when "grace"
                             @grace = rest[0].to_i
                         when "every"
