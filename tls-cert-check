@@ -217,6 +217,14 @@ def ldap_starttls!(sock)
     end
 end
 
+def lpr_transact!(sock, cmd, params)
+    sock.write(cmd.chr + params.join("\t") + "\n")
+    data = sock.recv(1)
+    if data != "\0"
+        raise "LPR error: ACK not received"
+    end
+end
+
 def pop_transact!(sock, command, with_data)
     if command
         sock.puts "#{command}\r"
@@ -285,6 +293,12 @@ def check_service(host, port, sni = nil)
             irc_starttls!(raw_sock)
         when 389
             ldap_starttls!(raw_sock)
+        when 515
+            # MyQ-specific; based on \PhpApps\MyQ\LPRClient.php
+            lpr_commands = { MYQ_STARTTLS: 200 }
+            lpr_transact!(raw_sock, lpr_commands[:MYQ_STARTTLS], [])
+            # TODO: incompatible with the 1999 draft which uses ?T
+            # http://asg.web.cmu.edu/sasl/draft-troll-lpr-extensions-00b.txt
         end
         ssl_sock = OpenSSL::SSL::SSLSocket.new(raw_sock)
         ssl_sock.hostname = sni || host
