@@ -300,7 +300,12 @@ def check_service(host, port, sni = nil)
             # TODO: incompatible with the 1999 draft which uses ?T
             # http://asg.web.cmu.edu/sasl/draft-troll-lpr-extensions-00b.txt
         end
-        ssl_sock = OpenSSL::SSL::SSLSocket.new(raw_sock)
+        ssl_context = OpenSSL::SSL::SSLContext.new
+        # Allow DH keys < 2048 bits (but >= 1024 bits); default level is 2
+        ssl_context.security_level = 1
+        # Allow TLSv1.0; default is :TLS1_2
+        ssl_context.min_version = :TLS1
+        ssl_sock = OpenSSL::SSL::SSLSocket.new(raw_sock, ssl_context)
         ssl_sock.hostname = sni || host
         ssl_sock.connect
         cert = ssl_sock.peer_cert
