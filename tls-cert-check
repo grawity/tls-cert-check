@@ -301,7 +301,7 @@ def check_service(host, port, sni = nil)
             # http://asg.web.cmu.edu/sasl/draft-troll-lpr-extensions-00b.txt
         end
         ssl_context = OpenSSL::SSL::SSLContext.new
-        # Allow DH keys < 2048 bits (but >= 1024 bits); default level is 2
+        # Allow DH keys < 2048 (but >= 1024) bits; default level is 2 in OpenSSL 1.1.1
         ssl_context.security_level = 1
         # Allow TLSv1.0; default is :TLS1_2
         ssl_context.min_version = :TLS1
