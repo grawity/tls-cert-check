@@ -372,7 +372,7 @@ class CertChecker
 
     def load_state!
         begin
-            @state = _load_json(@cache_path)
+            @state = _load_json(@cache_path) || {}
         rescue Errno::ENOENT
             @state = {}
         end
@@ -393,7 +393,11 @@ class CertChecker
     def check_one!(host, port, sni = nil)
         hp = format_host_port_sni(host, port, sni)
 
-        last_check = @state.dig("last_check", hp) || 0
+        begin
+            last_check = @state.dig("last_check", hp) || 0
+        rescue
+            last_check = 0
+        end
         if last_check > Time.now.to_i - @cache
             puts "skipping #{hp} (cached)..."
             return
