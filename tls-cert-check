@@ -39,6 +39,7 @@ require 'json'
 require 'openssl'
 require 'optparse'
 require 'pp'
+require 'resolv'
 require 'socket'
 require 'time'
 
@@ -121,6 +122,11 @@ def format_host_port_sni(host, port, sni)
     else
         return "#{hp}/#{sni}"
     end
+end
+
+def srv_lookup(domain)
+    rrset = Resolv::DNS.open() { |res| res.getresources(domain, Resolv::DNS::Resource::IN::SRV) }
+    return rrset.map{|rr| [rr.target.to_s, rr.port]}
 end
 
 def ftp_transact(sock, command)
@@ -358,6 +364,18 @@ class CertChecker
                             @hosts << host
                             @services[host] ||= []
                             @services[host] += ports.map{|p| {port: p.to_i, sni: sni}}
+                        when "checksrv"
+                            name, *rest = *rest
+                            if name =~ /^(.+)\/(.+?)$/
+                                _, name, sni = $~.to_a
+                            else
+                                sni = nil
+                            end
+                            srv_lookup(name).each do |host, port|
+                                @hosts << host
+                                @services[host] ||= []
+                                @services[host] << {port: port, sni: sni}
+                            end
                         when "grace"
                             @grace = rest[0].to_i
                         when "every"
