@@ -367,7 +367,7 @@ class CertChecker
                                 ports << "443"
                             end
                             ports.each do |port|
-                                self.add_host(host, port, sni)
+                                self.add_host(host, port.to_i, sni)
                             end
                         when "checkmx"
                             name, *rest = *rest
