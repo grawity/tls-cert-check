@@ -124,6 +124,11 @@ def format_host_port_sni(host, port, sni)
     end
 end
 
+def mx_lookup(domain)
+    rrset = Resolv::DNS.open() { |res| res.getresources(domain, Resolv::DNS::Resource::IN::MX) }
+    return rrset.map{|rr| [rr.exchange.to_s, 25]}
+end
+
 def srv_lookup(domain)
     rrset = Resolv::DNS.open() { |res| res.getresources(domain, Resolv::DNS::Resource::IN::SRV) }
     return rrset.map{|rr| [rr.target.to_s, rr.port]}
@@ -363,6 +368,12 @@ class CertChecker
                             end
                             ports.each do |port|
                                 self.add_host(host, port, sni)
+                            end
+                        when "checkmx"
+                            name, *rest = *rest
+                            # for MX, either no SNI, or sni = host
+                            mx_lookup(name).each do |host, port|
+                                self.add_host(host, port, nil)
                             end
                         when "checksrv"
                             name, *rest = *rest
