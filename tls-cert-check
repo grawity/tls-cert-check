@@ -361,9 +361,9 @@ class CertChecker
                             if ports.empty?
                                 ports << "443"
                             end
-                            @hosts << host
-                            @services[host] ||= []
-                            @services[host] += ports.map{|p| {port: p.to_i, sni: sni}}
+                            ports.each do |port|
+                                self.add_host(host, port, sni)
+                            end
                         when "checksrv"
                             name, *rest = *rest
                             if name =~ /^(.+)\/(.+?)$/
@@ -372,9 +372,7 @@ class CertChecker
                                 sni = nil
                             end
                             srv_lookup(name).each do |host, port|
-                                @hosts << host
-                                @services[host] ||= []
-                                @services[host] << {port: port, sni: sni}
+                                self.add_host(host, port, sni)
                             end
                         when "grace"
                             @grace = rest[0].to_i
