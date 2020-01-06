@@ -41,6 +41,7 @@ require 'optparse'
 require 'pp'
 require 'resolv'
 require 'socket'
+require 'syslog'
 require 'time'
 
 module XDG
@@ -80,6 +81,12 @@ end
 class OpenSSL::X509::Name
     def to_rfc2253
         to_s(OpenSSL::X509::Name::RFC2253)
+    end
+end
+
+def syslog(prio, msg)
+    if $syslog
+        Syslog.log(prio, msg)
     end
 end
 
@@ -432,11 +439,13 @@ class CertChecker
 
         begin
             puts "checking #{hp}..."
+            syslog(Syslog::LOG_INFO, "Checking certificate at #{hp}")
             cert = check_service(host, port, sni)
         rescue Interrupt
             raise
         rescue Exception => ex
             puts " - error: #{ex.class} #{ex.message}"
+            syslog(Syslog::LOG_WARNING, "Check of #{hp} failed: #{ex.class} #{ex.message}")
             @failures << "#{hp} – #{ex.class} #{ex.message}"
         else
             days = ((cert.not_after - Time.now) / 86400).to_i
@@ -456,9 +465,11 @@ class CertChecker
                 if days < 0
                     puts " - expired: #{-days} days ago" if @verbose
                     @expiries << "#{hp} – expired #{-days} days ago"
+                    syslog(Syslog::LOG_WARNING, "Check of #{hp}: expired #{-days} days ago")
                 else
                     puts " - expires: in #{days} days" if @verbose
                     @expiries << "#{hp} – expires in #{days} days" if days < grace
+                    syslog(Syslog::LOG_WARNING, "Check of #{hp}: will expire in #{days} days") if days < grace
                 end
             end
             @state["last_check"] ||= {}
@@ -472,6 +483,7 @@ class CertChecker
                 check_one!(host, i[:port], i[:sni])
             end
         end
+        syslog(Syslog::LOG_INFO, "All checks finished.")
     end
 
     private
@@ -490,6 +502,7 @@ class CertChecker
 end
 
 cc = CertChecker.new
+$syslog = false
 
 parser = OptionParser.new do |opts|
     opts.on("-c", "--config PATH", String, "Set path to configuration file") do |s|
@@ -500,6 +513,14 @@ parser = OptionParser.new do |opts|
     end
     opts.on("-v", "--verbose", "Show information for valid certificates") do
         cc.verbose = true
+    end
+    opts.on("--syslog", "Log progress to syslog") do
+        if !$syslog
+            $syslog = true
+            Syslog.open("tls-cert-check",
+                        Syslog::LOG_PID,
+                        Syslog::LOG_LOCAL0)
+        end
     end
 end
 parser.parse!
