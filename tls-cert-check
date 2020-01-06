@@ -86,6 +86,17 @@ end
 
 def syslog(prio, msg)
     if $syslog
+        prio = case prio
+               when :debug then Syslog::LOG_DEBUG
+               when :info then Syslog::LOG_INFO
+               when :notice then Syslog::LOG_NOTICE
+               when :warn then Syslog::LOG_WARNING
+               when :err then Syslog::LOG_ERR
+               when :crit then Syslog::LOG_CRIT
+               when :alert then Syslog::LOG_ALERT
+               when :emerg then Syslog::LOG_EMERG
+               else prio
+        end
         Syslog.log(prio, msg)
     end
 end
@@ -439,13 +450,13 @@ class CertChecker
 
         begin
             puts "checking #{hp}..."
-            syslog(Syslog::LOG_INFO, "Checking certificate at #{hp}")
+            syslog(:info, "Checking certificate at #{hp}")
             cert = check_service(host, port, sni)
         rescue Interrupt
             raise
         rescue Exception => ex
             puts " - error: #{ex.class} #{ex.message}"
-            syslog(Syslog::LOG_WARNING, "Check of #{hp} failed: #{ex.class} #{ex.message}")
+            syslog(:warn, "Check of #{hp} failed: #{ex.class} #{ex.message}")
             @failures << "#{hp} – #{ex.class} #{ex.message}"
         else
             days = ((cert.not_after - Time.now) / 86400).to_i
@@ -465,11 +476,11 @@ class CertChecker
                 if days < 0
                     puts " - expired: #{-days} days ago" if @verbose
                     @expiries << "#{hp} – expired #{-days} days ago"
-                    syslog(Syslog::LOG_WARNING, "Check of #{hp}: expired #{-days} days ago")
+                    syslog(:warn, "Check of #{hp}: expired #{-days} days ago")
                 else
                     puts " - expires: in #{days} days" if @verbose
                     @expiries << "#{hp} – expires in #{days} days" if days < grace
-                    syslog(Syslog::LOG_WARNING, "Check of #{hp}: will expire in #{days} days") if days < grace
+                    syslog(:warn, "Check of #{hp}: will expire in #{days} days") if days < grace
                 end
             end
             @state["last_check"] ||= {}
@@ -483,7 +494,7 @@ class CertChecker
                 check_one!(host, i[:port], i[:sni])
             end
         end
-        syslog(Syslog::LOG_INFO, "All checks finished.")
+        syslog(:info, "All checks finished.")
     end
 
     private
