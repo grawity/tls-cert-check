@@ -475,12 +475,14 @@ class CertChecker
                 end
                 if days < 0
                     puts " - expired: #{-days} days ago" if @verbose
-                    @expiries << "#{hp} – expired #{-days} days ago"
                     syslog(:warn, "Check of #{hp}: expired #{-days} days ago")
+                    @expiries << "#{hp} – expired #{-days} days ago"
+                elsif days < grace
+                    puts " - expires: in #{days} days" if @verbose
+                    syslog(:warn, "Check of #{hp}: will expire in #{days} days")
+                    @expiries << "#{hp} – expires in #{days} days"
                 else
                     puts " - expires: in #{days} days" if @verbose
-                    @expiries << "#{hp} – expires in #{days} days" if days < grace
-                    syslog(:warn, "Check of #{hp}: will expire in #{days} days") if days < grace
                 end
             end
             @state["last_check"] ||= {}
