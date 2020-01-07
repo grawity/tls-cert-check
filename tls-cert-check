@@ -448,6 +448,11 @@ class CertChecker
                 puts " - subject: #{cert.subject.to_rfc2253}"
                 puts " - issuer: #{cert.issuer.to_rfc2253}"
                 puts " - validity: #{cert.not_before} – #{cert.not_after}"
+                cert.extensions.each do |ext|
+                    if ext.oid == "subjectAltName"
+                        puts " - SAN: #{ext.value.to_s.gsub(/DNS:/, "")}"
+                    end
+                end
                 if days < 0
                     puts " - expired: #{-days} days ago" if @verbose
                     @expiries << "#{hp} – expired #{-days} days ago"
