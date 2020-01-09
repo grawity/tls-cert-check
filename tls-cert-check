@@ -299,6 +299,24 @@ def smtp_transact!(sock, command)
     return responses
 end
 
+def mysql_starttls!(sock)
+    cap_v41_proto   = 0x0000_0200
+    cap_start_tls   = 0x0000_0800
+    cap_v41_auth    = 0x0000_8000
+    # receive server handshake
+    msg = sock.recv(1024)
+    # send SSLRequest packet (must always be seq 1)
+    msg = [
+        cap_v41_proto | cap_v41_auth | cap_start_tls, # client capabilities
+        0x01000000, # max packet size
+        0x21, # client collation utf8_general_ci
+        "\0" * 19, # username
+        0x00000000, # reserved
+    ].pack("L< L< C a* L<")
+    hdr = [msg.length | (seq = 1) << 24].pack("L<")
+    sock.write(hdr + msg)
+end
+
 def check_service(host, port, sni = nil)
     cert = nil
     Socket.tcp(host, port, :connect_timeout => 3) do |raw_sock|
@@ -328,6 +346,8 @@ def check_service(host, port, sni = nil)
             lpr_transact!(raw_sock, lpr_commands[:MYQ_STARTTLS], [])
             # TODO: incompatible with the 1999 draft which uses ?T
             # http://asg.web.cmu.edu/sasl/draft-troll-lpr-extensions-00b.txt
+        when 3306
+            mysql_starttls!(raw_sock)
         end
         ssl_context = OpenSSL::SSL::SSLContext.new
         # Allow DH keys < 2048 (but >= 1024) bits; default level is 2 in OpenSSL 1.1.1
