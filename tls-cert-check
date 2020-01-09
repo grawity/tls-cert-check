@@ -29,6 +29,7 @@
 #   - IMAP on port 143
 #   - IRC on port 194, 6667
 #   - LDAP on port 389
+#   - MySQL on port 3306
 #   - NNTP on port 119
 #   - POP3 on port 110
 #   - SMTP on port 25, 587
@@ -255,6 +256,24 @@ def lpr_transact!(sock, cmd, params)
     end
 end
 
+def mysql_starttls!(sock)
+    cap_v41_proto   = 0x0000_0200
+    cap_start_tls   = 0x0000_0800
+    cap_v41_auth    = 0x0000_8000
+    # receive server handshake
+    msg = sock.recv(1024)
+    # send SSLRequest packet (must always be seq 1)
+    msg = [
+        cap_v41_proto | cap_v41_auth | cap_start_tls, # client capabilities
+        0x01000000, # max packet size
+        0x21, # client collation utf8_general_ci
+        "\0" * 19, # username
+        0x00000000, # reserved
+    ].pack("L< L< C a* L<")
+    hdr = [msg.length | (seq = 1) << 24].pack("L<")
+    sock.write(hdr + msg)
+end
+
 def nntp_transact!(sock, command)
     # NNTP is sufficiently SMTP-like that we can just use this.
     responses = smtp_transact(sock, command)
@@ -307,24 +326,6 @@ def smtp_transact!(sock, command)
         raise "SMTP failure: #{command.inspect} -> #{responses.inspect}"
     end
     return responses
-end
-
-def mysql_starttls!(sock)
-    cap_v41_proto   = 0x0000_0200
-    cap_start_tls   = 0x0000_0800
-    cap_v41_auth    = 0x0000_8000
-    # receive server handshake
-    msg = sock.recv(1024)
-    # send SSLRequest packet (must always be seq 1)
-    msg = [
-        cap_v41_proto | cap_v41_auth | cap_start_tls, # client capabilities
-        0x01000000, # max packet size
-        0x21, # client collation utf8_general_ci
-        "\0" * 19, # username
-        0x00000000, # reserved
-    ].pack("L< L< C a* L<")
-    hdr = [msg.length | (seq = 1) << 24].pack("L<")
-    sock.write(hdr + msg)
 end
 
 def check_service(host, port, sni = nil)
