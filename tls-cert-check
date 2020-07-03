@@ -450,6 +450,8 @@ class CertChecker
                             sni = nil
                             if name =~ /^(.+)\/(.+?)$/
                                 _, name, sni = $~.to_a
+                            elsif name =~ /^_xmpps?-(?:client|server)\._tcp\.(.+)$/
+                                sni = $1
                             end
                             srv_lookup(name).each do |host, port|
                                 self.add_host(host, port, sni)
@@ -493,9 +495,12 @@ class CertChecker
             end
         elsif arg =~ /^SRV:(.+)$/
             # Unlike most other protocols, XMPP uses the JID @domain part as SNI.
+            # So allow SNI to be specified explicitly, and try to guess it as well.
             name, sni = $1, nil
             if name =~ /^(.+)\/(.+?)$/
                 _, name, sni = $~.to_a
+            elsif name =~ /^_xmpps?-(?:client|server)\._tcp\.(.+)$/
+                sni = $1
             end
             srv_lookup(name).each do |host, port|
                 self.add_host(host, port, sni)
