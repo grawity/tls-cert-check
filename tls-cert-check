@@ -442,16 +442,14 @@ class CertChecker
                             end
                         when "checkmx"
                             name, *rest = *rest
-                            # for MX, either no SNI, or sni = host
                             mx_lookup(name).each do |host, port|
                                 self.add_host(host, port, nil)
                             end
                         when "checksrv"
                             name, *rest = *rest
+                            sni = nil
                             if name =~ /^(.+)\/(.+?)$/
                                 _, name, sni = $~.to_a
-                            else
-                                sni = nil
                             end
                             srv_lookup(name).each do |host, port|
                                 self.add_host(host, port, sni)
@@ -494,8 +492,13 @@ class CertChecker
                 self.add_host(host, port, nil)
             end
         elsif arg =~ /^SRV:(.+)$/
-            srv_lookup($1).each do |host, port|
-                self.add_host(host, port, nil)
+            # Unlike most other protocols, XMPP uses the JID @domain part as SNI.
+            name, sni = $1, nil
+            if name =~ /^(.+)\/(.+?)$/
+                _, name, sni = $~.to_a
+            end
+            srv_lookup(name).each do |host, port|
+                self.add_host(host, port, sni)
             end
         else
             host, port, sni = parse_host_port_sni(arg, 443)
