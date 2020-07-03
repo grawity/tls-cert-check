@@ -488,6 +488,21 @@ class CertChecker
         @services[host] << {port: port, sni: sni}
     end
 
+    def add_host_parse(arg)
+        if arg =~ /^MX:(.+)$/
+            mx_lookup($1).each do |host, port|
+                self.add_host(host, port, nil)
+            end
+        elsif arg =~ /^SRV:(.+)$/
+            srv_lookup($1).each do |host, port|
+                self.add_host(host, port, nil)
+            end
+        else
+            host, port, sni = parse_host_port_sni(arg, 443)
+            self.add_host(host, port, sni)
+        end
+    end
+
     def check_one!(host, port, sni = nil)
         hp = format_host_port_sni(host, port, sni)
 
@@ -601,18 +616,7 @@ if ARGV.empty?
     cc.store_state!
 else
     ARGV.each do |arg|
-        if arg =~ /^SRV:(.+)$/
-            srv_lookup($1).each do |host, port|
-                cc.add_host(host, port, nil)
-            end
-        elsif arg =~ /^MX:(.+)$/
-            mx_lookup($1).each do |host, port|
-                cc.add_host(host, port, nil)
-            end
-        else
-            host, port, sni = parse_host_port_sni(arg, 443)
-            cc.add_host(host, port, sni)
-        end
+        cc.add_host_parse(arg)
     end
     cc.check_all!
 end
