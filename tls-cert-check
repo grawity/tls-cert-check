@@ -361,6 +361,15 @@ def smtp_transact!(sock, command)
     return responses
 end
 
+def xmpp_starttls!(sock, host)
+    sock.puts "<stream:stream xmlns='jabber:client' xmlns:stream='http://etherx.jabber.org/streams' xmlns:tls='urn:ietf:params:xml:ns:xmpp-tls' to='#{host}'><tls:starttls/>"
+    sock.flush
+    data = sock.recv(4096)
+    if data !~ /<([a-z]+:)?proceed/
+        raise "XMPP failure: no <proceed/> tag in #{data}"
+    end
+end
+
 def check_service(host, port, sni = nil)
     cert = nil
     Socket.tcp(host, port, :connect_timeout => 3) do |raw_sock|
@@ -396,6 +405,8 @@ def check_service(host, port, sni = nil)
             # http://asg.web.cmu.edu/sasl/draft-troll-lpr-extensions-00b.txt
         when 3306
             mysql_starttls!(raw_sock)
+        when 5222
+            xmpp_starttls!(raw_sock, sni || host)
         end
         ssl_context = OpenSSL::SSL::SSLContext.new
         # Allow DH keys < 2048 (but >= 1024) bits; default level is 2 in OpenSSL 1.1.1
