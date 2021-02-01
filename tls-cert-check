@@ -380,7 +380,7 @@ class CertChecker
 
         if !File.exist?(@config_path)
             @config_path = "/etc/tls-cert-check.conf"
-            @cache_path = "/var/lib/tls-cert-check/state"
+            @cache_path = "/var/cache/tls-cert-check/state"
         end
 
         @hosts = []
