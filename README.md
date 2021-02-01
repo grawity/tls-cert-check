@@ -24,7 +24,13 @@ then the domain itself is used for SNI in accordance with XEP-0368.
 
 ### Synopsis
 
-    tls-cert-check [HOST:PORT...]
+Cronjob:
+
+    @daily chronic tls-cert-check [--config ~/hosts.conf] [--syslog]
+
+Interactive use:
+
+    tls-cert-check HOST:PORT...
 
 Arguments:
 
