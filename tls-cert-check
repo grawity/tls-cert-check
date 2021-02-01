@@ -574,6 +574,9 @@ parser = OptionParser.new do |opts|
     opts.on("-c", "--config PATH", String, "Set path to configuration file") do |s|
         cc.config_path = s
     end
+    opts.on("-C", "--cache PATH", String, "Set path to cache file") do |s|
+        cc.cache_path = s
+    end
     opts.on("-g", "--grace DAYS", Integer, "Change minimum time until expiry") do |i|
         cc.grace = i
     end
