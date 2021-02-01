@@ -404,49 +404,45 @@ class CertChecker
     attr_reader :expiries
 
     def load_config!
-        begin
-            File.open(@config_path, "r") do |f|
-                f.each do |line|
-                    cmd, *rest = line.strip.split
-                    case cmd
-                        when "check"
-                            host, *ports = *rest
-                            if host =~ /^(.+)\/(.+?)$/
-                                _, host, sni = $~.to_a
-                            else
-                                sni = nil
-                            end
-                            if ports.empty?
-                                ports << "443"
-                            end
-                            ports.each do |port|
-                                self.add_host(host, port.to_i, sni)
-                            end
-                        when "checkmx"
-                            name, *rest = *rest
-                            mx_lookup(name).each do |host, port|
-                                self.add_host(host, port, nil)
-                            end
-                        when "checksrv"
-                            name, *rest = *rest
+        File.open(@config_path, "r") do |f|
+            f.each do |line|
+                cmd, *rest = line.strip.split
+                case cmd
+                    when "check"
+                        host, *ports = *rest
+                        if host =~ /^(.+)\/(.+?)$/
+                            _, host, sni = $~.to_a
+                        else
                             sni = nil
-                            if name =~ /^(.+)\/(.+?)$/
-                                _, name, sni = $~.to_a
-                            elsif name =~ /^_xmpps?-(?:client|server)\._tcp\.(.+)$/
-                                sni = $1
-                            end
-                            srv_lookup(name).each do |host, port|
-                                self.add_host(host, port, sni)
-                            end
-                        when "grace"
-                            @grace = rest[0].to_i
-                        when "every"
-                            @cache = rest[0].to_i
-                    end
+                        end
+                        if ports.empty?
+                            ports << "443"
+                        end
+                        ports.each do |port|
+                            self.add_host(host, port.to_i, sni)
+                        end
+                    when "checkmx"
+                        name, *rest = *rest
+                        mx_lookup(name).each do |host, port|
+                            self.add_host(host, port, nil)
+                        end
+                    when "checksrv"
+                        name, *rest = *rest
+                        sni = nil
+                        if name =~ /^(.+)\/(.+?)$/
+                            _, name, sni = $~.to_a
+                        elsif name =~ /^_xmpps?-(?:client|server)\._tcp\.(.+)$/
+                            sni = $1
+                        end
+                        srv_lookup(name).each do |host, port|
+                            self.add_host(host, port, sni)
+                        end
+                    when "grace"
+                        @grace = rest[0].to_i
+                    when "every"
+                        @cache = rest[0].to_i
                 end
             end
-        rescue Errno::ENOENT => e
-            warn("config file not found: #{e}")
         end
     end
 
