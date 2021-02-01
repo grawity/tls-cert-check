@@ -378,6 +378,11 @@ class CertChecker
         @config_path = "#{XDG.config_dir}/tls-cert-check.conf"
         @cache_path = "#{XDG.cache_dir}/tls-cert-check.state"
 
+        if !File.exist?(@config_path)
+            @config_path = "/etc/tls-cert-check.conf"
+            @cache_path = "/var/lib/tls-cert-check/state"
+        end
+
         @hosts = []
         @services = {}
         @grace = 30
