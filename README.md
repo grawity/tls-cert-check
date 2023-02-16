@@ -53,8 +53,8 @@ Example configuration:
     grace 28
 
     # check these hosts on given ports (STARTTLS is used automatically)
-    check example.com 389 443 636
-    check mail.example.com 25 143 587
+    check example.com 389,443,636
+    check mail.example.com 25,143,587
 
     # check all mail servers listed by MX or SRV records
     checkmx example.com

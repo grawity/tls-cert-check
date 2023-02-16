@@ -417,9 +417,15 @@ class CertChecker
                         end
                         if ports.empty?
                             ports << "443"
-                        end
-                        ports.each do |port|
-                            self.add_host(host, port.to_i, sni)
+                        elsif ports.length == 1
+                            ports[0].split(",").each do |port|
+                                self.add_host(host, port.to_i, sni)
+                            end
+                        else
+                            # Deprecated
+                            ports.each do |port|
+                                self.add_host(host, port.to_i, sni)
+                            end
                         end
                     when "checkmx"
                         name, *rest = *rest
