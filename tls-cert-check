@@ -454,15 +454,19 @@ class CertChecker
     end
 
     def load_state!
-        begin
-            @state = _load_json(@cache_path) || {}
-        rescue Errno::ENOENT
-            @state = {}
+        if @cache_path != ""
+            begin
+                @state = _load_json(@cache_path) || {}
+            rescue Errno::ENOENT
+                @state = {}
+            end
         end
     end
 
     def store_state!
-        _dump_json(@state, @cache_path)
+        if @cache_path != ""
+            _dump_json(@state, @cache_path)
+        end
     end
 
     def add_host(host, port, sni)
