@@ -396,6 +396,7 @@ class CertChecker
     end
 
     attr_accessor :config_path
+    attr_accessor :cache_path
 
     attr_accessor :grace
     attr_accessor :verbose
