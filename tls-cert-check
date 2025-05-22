@@ -505,8 +505,19 @@ class CertChecker
         end
     end
 
-    def get_grace_period_for_issuer(dn)
-        return @grace[dn.to_rfc2253] || @grace[nil]
+    def get_grace_period_for_issuer(issuer_dn)
+        dn = issuer_dn.to_rfc2253
+        @grace.each do |pattern, days|
+            if pattern == dn
+                return days
+            elsif pattern =~ /^\/(.+)\/$/
+                pattern = $1
+                if dn =~ /#{pattern}/
+                    return days
+                end
+            end
+        end
+        return @grace[nil]
     end
 
     def check_one!(host, port, sni = nil)

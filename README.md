@@ -52,8 +52,9 @@ Example configuration:
     # warn if certificate expires in 28 days or less
     grace 28
 
-    # except for Let's Encrypt which can have a shorter limit
-    grace 10 CN=E6,O=Let's Encrypt,C=US
+    # shorter expiry for CAs which are used in an automated way
+    grace 10 CN=Symlink Host Identity SubCA,O=Symbolic Link,C=LT
+    grace 10 /,O=Let's Encrypt,C=US$/
 
     # check these hosts on given ports (STARTTLS is used automatically)
     check example.com 389,443,636
