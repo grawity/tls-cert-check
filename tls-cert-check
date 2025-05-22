@@ -505,6 +505,10 @@ class CertChecker
         end
     end
 
+    def get_grace_period_for_issuer(dn)
+        return @grace[dn.to_rfc2253] || @grace[nil]
+    end
+
     def check_one!(host, port, sni = nil)
         hp = format_host_port_sni(host, port, sni)
 
@@ -530,7 +534,7 @@ class CertChecker
             @failures << "#{hp} – #{ex.class} #{ex.message}"
         else
             days = ((cert.not_after - Time.now) / 86400).to_i
-            grace = @grace[cert.issuer.to_rfc2253] || @grace[nil]
+            grace = self.get_grace_period_for_issuer(cert.issuer)
             if days < grace or @verbose
                 puts " - subject: #{cert.subject.to_rfc2253}"
                 puts " - issuer: #{cert.issuer.to_rfc2253}"
