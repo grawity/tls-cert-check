@@ -385,7 +385,8 @@ class CertChecker
 
         @hosts = []
         @services = {}
-        @grace = {nil: 30}
+        @grace_default = 30
+        @grace_issuer = []
         @cache = 3600
         @verbose = false
 
@@ -397,7 +398,7 @@ class CertChecker
     attr_accessor :config_path
     attr_accessor :cache_path
 
-    attr_accessor :grace
+    attr_accessor :grace_default
     attr_accessor :verbose
 
     attr_reader :failures
@@ -446,11 +447,11 @@ class CertChecker
                     when "grace"
                         days, *rest = rest
                         if rest.empty?
-                            issuer = nil
+                            @grace_default = days.to_i
                         else
                             issuer = rest.join(" ")
+                            @grace_issuer << [issuer, days.to_i]
                         end
-                        @grace[issuer] = days.to_i
                     when "every"
                         @cache = rest[0].to_i
                 end
@@ -507,7 +508,7 @@ class CertChecker
 
     def get_grace_period_for_issuer(issuer_dn)
         dn = issuer_dn.to_rfc2253
-        @grace.each do |pattern, days|
+        @grace_issuer.each do |pattern, days|
             if pattern == dn
                 return days
             elsif pattern =~ /^\/(.+)\/$/
@@ -517,7 +518,7 @@ class CertChecker
                 end
             end
         end
-        return @grace[nil]
+        return @grace_default
     end
 
     def check_one!(host, port, sni = nil)
@@ -600,14 +601,14 @@ cc = CertChecker.new
 $syslog = false
 
 parser = OptionParser.new do |opts|
-    opts.on("-c", "--config PATH", String, "Set path to configuration file") do |s|
-        cc.config_path = s
+    opts.on("-c", "--config PATH", String, "Set path to configuration file") do |arg|
+        cc.config_path = arg
     end
-    opts.on("-C", "--cache PATH", String, "Set path to cache file") do |s|
-        cc.cache_path = s
+    opts.on("-C", "--cache PATH", String, "Set path to cache file") do |arg|
+        cc.cache_path = arg
     end
-    opts.on("-g", "--grace DAYS", Integer, "Change minimum time until expiry") do |i|
-        cc.grace[nil] = i
+    opts.on("-g", "--grace DAYS", Integer, "Change minimum time until expiry") do |arg|
+        cc.grace_default = arg
     end
     opts.on("-v", "--verbose", "Show information for valid certificates") do
         cc.verbose = true
